@@ -1,126 +1,79 @@
-# Picocalc_SD_Boot 
+# UF2 Loader
 
-`Picocalc_SD_Boot` is a custom bootloader for the Raspberry Pi Pico. This bootloader provides the functionality to load and execute applications from an SD card, designed to enable PicoCalc to load firmware to the Pico using an SD card easily.
+`UF2 Loader` is a custom bootloader for the RP2040 and RP2350 on the PicoCalc. With UF2 Loader installed, applications can be loaded directly from the SD card at will without needing to plug into a PC.
 
 <div align="center">
-    <img src="img/sd_boot.jpg" alt="sdboot" width="80%">
+    <img src="img/uf2loader.jpg" alt="UF2 Loader" width="80%">
 </div>
 
-## 🚧 Improvement Plans
-work in progress plans [Feature Request Post](https://forum.clockworkpi.com/t/i-made-an-app-that-dynamically-load-firmware-from-sd-card/16664/25?u=adwuard)
-- [ ] Avoiding the need to recompile Apps, A/B image see [Address Translation (see page 364 of the RP2350 datasheet, section 5.1.19)](https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf)
-- [ ] Support for .uf2 files, extract `.bin` from `.uf2` firmware  [pico-bootrom](https://github.com/raspberrypi/pico-bootrom-rp2350)
-- [ ] USB Mass Storage mode for SD card. [Related Demo Code](https://github.com/hathach/tinyusb/tree/master/examples/device/cdc_msc/src)
+## Features
 
+* Runs standard UF2 files built by the pico-sdk without modification (if the app does not itself write to flash)
+* Can load binaries compiled with pico-sdk's `no-flash` flag into RAM and execute them without erasing the currently flashed app.
+* USB Mass Storage support for accessing the SD card from a PC.
 
-
-## Prebuilt .uf2 Firmware Available
-[![Download Prebuilt Firmware](https://img.shields.io/badge/Download-Firmware-blue)](https://github.com/adwuard/Picocalc_SD_Boot/tree/main/prebuild_output)
-
-Click the button above to download the prebuilt `.uf2` firmware for the `Picocalc_SD_Boot ` bootloader. Flash your pico with holding BOOT_SEL and drag and drop the `.uf2` file.
-
-
-## Bootloader Build From Scratch
+## Compilation
 Clone the source code and initialize the submodules.
 
 ```bash
-git clone https://github.com/adwuard/Picocalc_SD_Boot.git
-cd Picocalc_SD_Boot
+git clone https://github.com/pelrun/uf2loader.git
+cd uf2loader
 git submodule update --init --recursive
 ```
 
 Build the bootloader.
 
 ```bash
-cd ./src
-mkdir build; cd build
-cmake ..
-make
+PICO_SDK_PATH=/path/to/pico-sdk cmake -DPICO_BOARD=pico -B build -S .
+cd build
+make -j8
 ```
 
-## SD Card Application Build and Deployment
-🚨 **Important Note:** 🚨  
-```
-Applications intended for SD card boot "MUST REBUILD" using a custom linker script to accommodate the program's offset address. 
-```
-✅ You can find all the recompiled firmware available in the [sd_card_content](https://github.com/adwuard/Picocalc_SD_Boot/tree/main/sd_card_content) folder.
+The compiled binaries will be placed in the `output/` folder.
 
---- 
-This section explains how to build and deploy applications on an SD card. Below is a simple example of a CMakeLists.txt for an application.
+## Installation
 
+Copy `BOOT2040.UF2` (for Pico/Pico W) or `BOOT2350.UF2` (for Pico 2/2W) to the root of the Picocalc SD card. This is the menu UI and is loaded by the bootloader when needed.
 
-## Step 1 Copy Custom Link Script
-Copy `memmap_sdcard_app.ld` to your project repository.
+Create `pico1-apps` (for Pico/Pico W) or `pico2-apps` (for Pico 2/2W) folders on the SD card and copy any UF2 files you want to use to them.
 
-## Step 2 Add Custom Link Script to CMakeList.txt
-```CMakeLists.txt
-cmake_minimum_required(VERSION 3.13...3.27)
-include(vendor/pico_sdk_import.cmake)
-add_subdirectory(pico-sdcard-boot)
+Pico 1 and Pico 2 files can coexist on the SD card simultaneously.
 
-project(hello)
-set(FAMILY rp2040)
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 17)
-pico_sdk_init()
+Flash `bootloader_pico.uf2` (for Pico/Pico W) or `bootloader_pico2.uf2` (Pico 2/2W) to your Pico using BOOTSEL mode or Picotool.
 
-add_executable(hello main.c)
-target_link_libraries(hello PRIVATE pico_stdlib)
-pico_enable_stdio_usb(hello 1)
-pico_add_extra_outputs(hello)
+# Usage
 
+If an application is already present in flash, by default it will be started immediately on power-on.
 
-# ----------- COPY THIS Section -----------
-function(enable_sdcard_app target)
-  #pico_set_linker_script(${target} ${CMAKE_SOURCE_DIR}/memmap_sdcard_app.ld)
-  if(${PICO_PLATFORM} STREQUAL "rp2040")
-    pico_set_linker_script(${CMAKE_PROJECT_NAME} ${CMAKE_SOURCE_DIR}/memmap_default_rp2040.ld)
-  elseif(${PICO_PLATFORM} MATCHES "rp2350")
-    pico_set_linker_script(${CMAKE_PROJECT_NAME} ${CMAKE_SOURCE_DIR}/memmap_default_rp2350.ld)
-  endif()
-endfunction()
-# ----------- COPY THIS Section END -----------
-```
-The `enable_sdcard_app()` function sets the necessary `memmap_sdcard_app.ld` linker script for projects that boot from an SD card.
+Hold Up, F1 or F5 during power-on to launch the loader menu.
 
-### Build and Deployment Process
-1. Build the project using the above CMakeLists.txt.
+If an application is present, the first item in the menu (in [square brackets]) will launch it. If the application has the appropriate Binary Information block then the name of the application will be shown here.
 
-```bash
-mkdir build; cd build
-PICO_SDK_PATH=/path/to/pico-sdk cmake ..
-make
-```
+Hold Down or F3 during power-on to put the Pico into BOOTSEL mode.
 
-## Step 3 Your Custom Application Is Ready For SD Card Boot 
-Once the build is complete, copy the generated `APP_FW.bin` file to the `/sd` directory of the SD card.
+If the menu cannot be loaded for any reason (no SD card, BOOTnnnn.UF2 not found, aliens etc) then the device will fall into BOOTSEL mode.
 
+On the RP2350 only, UF2 files can also be written to the Pico in BOOTSEL mode or via Picotool as normal and will automatically be placed in the app partition.
 
+To use the USB Mass Storage mode, connect the PC to the pico's micro-usb port *after* the UI has been entered. Eject or unplug the usb cable to resume using the menu.
+If the Pico is connected to the PC before turning on PicoCalc, the Pico will power up before the keyboard is available and things will get confused. Unplug and power-cycle the PicoCalc, enter the menu, then connect USB.
 
 ## Technical Implementation Notes
-### Flash Update Mechanism
-The bootloader implements a safe update mechanism with the following features:
+On the RP2040, the top 16k of flash is occupied and must not be overwritten by the application. 8k is for the bootloader, and 8k is used by the bluetooth stack on the W.
 
-- The bootloader itself resides in a protected flash area (first 256KB) that is never overwritten during updates
-- Only the application region of flash (starting at 256KB) is updated using `flash_range_erase` and `flash_range_program`
-- The bootloader verifies if the update differs from the current flash image before performing any write operations
-- Flash programming operations are executed from RAM using the `__not_in_flash_func` attribute to ensure safe execution while the flash is being modified
-- Program size is verified to prevent overwriting critical memory regions
+As the RP2040 does not have a mechanism for write protecting flash regions, the application has to manually avoid flashing this area, and so the bootloader stores some information in the application vector table for use by the developer to know how much free flash space is available in place of the `PICO_FLASH_SIZE_BYTES` macro.
 
+If the magic number (`0xe98cc638`) is present at `XIP_BASE+0x110`, then the word at `XIP_BASE+0x114` is the size of the safe flash area. The application is free to erase or reflash any addresses below this without affecting the bootloader.
 
-### Flash Programming Safety
-When updating flash memory, the code that performs the flash operations must not be executed from the flash itself. The bootloader ensures this by:
-
-1. Using the Raspberry Pi Pico SDK's `__not_in_flash_func` attribute for all flash programming functions
-2. This attribute ensures the functions are executed from RAM rather than flash
-3. Without this protection, attempting to modify the flash while executing code from it could lead to unpredictable behavior or bricking the device
+On the RP2350, a flash partition is used, and the application can't directly overwrite (or even see) the bootloader in the normal case (please use RP2350's `rom_flash_op` instead of the old `flash_range_erase/flash_range_program` apis, which do not care about the partition table.) The application can get the size of the partition via the bootrom API. (see `bl_app_partition_get_info()` in proginfo.c for an implementation.)
 
 ## Credits
-- [Hiroyuki Oyama](https://github.com/oyama/pico-sdcard-boot): Special thanks for the firmware loader mechanism and VFS file system.
-  - https://github.com/oyama/pico-sdcard-boot
-  - https://github.com/oyama/pico-vfs
-- [TheKiwil](https://github.com/TheKiwil/): Special thanks for contributions on supporting pico2 boards with new custom linker script.
+- [adwuard](https://github.com/adwuard/Picocalc_SD_Boot): Special thanks for the Picocalc SD Boot application that UF2 Loader is heavily based on.
+- [Hiroyuki Oyama](https://github.com/oyama/pico-sdcard-boot): Special thanks for the bootloader that SD-Boot is based on.
+- [muzkr](https://github.com/muzkr/hachi/): Special thanks for the boot2/high-mem code
+- [cuu](https://github.com/clockworkpi/PicoCalc): Various UI improvements taken from their SD Boot fork
+- [nipo](https://github.com/nipo/picore): Pico Binary Information parser library
+- [ChaN](https://elm-chan.org/): because everyone uses their FatFS and Petit FatFS libraries. E. v. e. r. y. o. n. e.
 
 ## Read More
-- Blog on this repository, and more technical detail about bootloader. -->[Blog Page](https://hsuanhanlai.com/writting-custom-bootloader-for-RPI-Pico/)
-- Fourm Page and Discussion: [Clockwork Pi Fourm](https://forum.clockworkpi.com/t/i-made-an-app-that-dynamically-load-firmware-from-sd-card/16664/24)
+- Forum Page and Discussion: [Clockwork Pi Forum](https://forum.clockworkpi.com/t/uf2-loader-release/18479)
