@@ -155,9 +155,10 @@ static void format_file_size(off_t size, int type, char *buf, size_t buf_size)
 static void set_default_entry()
 {
   entry_count = 0;
-
+  const char *filename ="Default App";
+  /*
   const char *filename = pr_binary_info_program_name();
-
+  
   if (!filename)
   {
     filename = bl_proginfo_filename();
@@ -167,7 +168,7 @@ static void set_default_entry()
   {
     filename = "Current App";
   }
-
+  */
   snprintf(entries[entry_count].name, sizeof(entries[entry_count].name), "[%s]", filename);
 
   entries[entry_count].type = ENTRY_IS_LAST_APP;

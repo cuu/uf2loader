@@ -3,6 +3,7 @@
 #include <pico/bootrom.h>
 #include <boot/picobin.h>
 #include <hardware/flash.h>
+#include "hardware/watchdog.h"
 
 #include "i2ckbd.h"
 #include "proginfo.h"
@@ -161,12 +162,17 @@ int main()
   }
 
   // Boot application from flash
-  if (mode == BOOT_DEFAULT)
+  if (mode == BOOT_DEFAULT && watchdog_hw->scratch[3] == PICOCALC_BL_MAGIC)
   {
     DEBUG_PRINT("Boot application from flash\n");
     launch_application();
   }
 
+  if(mode == BOOT_SD) 
+  {
+    DEBUG_PRINT("Boot application from flash\n");
+    launch_application();
+  }
   // Load UI from SD card
   DEBUG_PRINT("Loading UI\n");
 
@@ -192,9 +198,11 @@ int main()
     {
       DEBUG_PRINT("Launch UI\n");
       // launch ui app now in ram
+      watchdog_hw->scratch[3] = PICOCALC_BL_MAGIC;
       launch_application_from_ram();
     }
   }
+	
 
   // just fall back to bootsel here on failure until LCD is implemented
   // falling back to the application gave misleading feedback to users
